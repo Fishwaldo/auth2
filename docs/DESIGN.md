@@ -123,6 +123,171 @@ func IsCompatibleVersion(constraint VersionConstraint, version string) bool { /*
 - **Testability**: Easy to mock providers for testing
 - **Developer Experience**: Better IDE support and error messages
 
+## Storage Adapters with Generic Plugin State Support
+
+The storage system is designed to support plugin-specific state without requiring each plugin to define its own tables or storage schema. This is achieved through a generic state storage mechanism:
+
+### 1. Entity-Attribute-Value Model for Plugin State
+
+```go
+// StateStore interface provides storage for plugin-specific state
+type StateStore interface {
+    // StoreState stores plugin state for a specific entity
+    StoreState(ctx context.Context, namespace string, entityID string, key string, value interface{}) error
+    
+    // GetState retrieves plugin state for a specific entity
+    GetState(ctx context.Context, namespace string, entityID string, key string, valuePtr interface{}) error
+    
+    // DeleteState removes plugin state
+    DeleteState(ctx context.Context, namespace string, entityID string, key string) error
+    
+    // ListStateKeys lists all state keys for a specific entity and namespace
+    ListStateKeys(ctx context.Context, namespace string, entityID string) ([]string, error)
+}
+```
+
+### 2. Implementation in Storage Adapters
+
+Each storage adapter (SQL, GORM, Ent, Memory) implements the StateStore interface using a flexible storage approach:
+
+1. **SQL Implementation**: Uses a generic `entity_state` table with schema:
+   ```sql
+   CREATE TABLE entity_state (
+       namespace   VARCHAR(255) NOT NULL,
+       entity_id   VARCHAR(255) NOT NULL,
+       key         VARCHAR(255) NOT NULL,
+       value_type  VARCHAR(50)  NOT NULL, -- json, string, int, etc.
+       value_data  TEXT         NOT NULL,
+       created_at  TIMESTAMP    NOT NULL,
+       updated_at  TIMESTAMP    NOT NULL,
+       PRIMARY KEY (namespace, entity_id, key)
+   );
+   ```
+
+2. **GORM Implementation**: Uses a generic EntityState model:
+   ```go
+   type EntityState struct {
+       Namespace  string    `gorm:"primaryKey;type:varchar(255)"`
+       EntityID   string    `gorm:"primaryKey;type:varchar(255)"`
+       Key        string    `gorm:"primaryKey;type:varchar(255)"`
+       ValueType  string    `gorm:"type:varchar(50)"`
+       ValueData  string    `gorm:"type:text"`
+       CreatedAt  time.Time
+       UpdatedAt  time.Time
+   }
+   ```
+
+3. **Ent Implementation**: Uses a flexible schema with appropriate indexes:
+   ```go
+   // EntityState schema for Ent
+   func (EntityState) Fields() []ent.Field {
+       return []ent.Field{
+           field.String("namespace"),
+           field.String("entity_id"),
+           field.String("key"),
+           field.String("value_type"),
+           field.Text("value_data"),
+           field.Time("created_at"),
+           field.Time("updated_at"),
+       }
+   }
+   
+   func (EntityState) Indexes() []ent.Index {
+       return []ent.Index{
+           index.Fields("namespace", "entity_id", "key").Unique(),
+       }
+   }
+   ```
+
+4. **In-Memory Implementation**: Uses nested maps:
+   ```go
+   // In-memory state store
+   type stateMap map[string]map[string]map[string]stateEntry
+   
+   type stateEntry struct {
+       ValueType string
+       ValueData string
+       CreatedAt time.Time
+       UpdatedAt time.Time
+   }
+   ```
+
+### 3. Serialization and Type Safety
+
+The state store handles serialization and deserialization transparently:
+
+```go
+// Serialization example (SQL adapter)
+func (s *SQLStateStore) StoreState(ctx context.Context, namespace, entityID, key string, value interface{}) error {
+    valueType, valueData, err := serializeValue(value)
+    if err != nil {
+        return err
+    }
+    
+    // SQL query to insert or update state
+    query := `
+        INSERT INTO entity_state (namespace, entity_id, key, value_type, value_data, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE value_type = ?, value_data = ?, updated_at = ?
+    `
+    
+    now := time.Now()
+    _, err = s.db.ExecContext(ctx, query, 
+        namespace, entityID, key, valueType, valueData, now, now,
+        valueType, valueData, now)
+    
+    return err
+}
+
+// Deserialization example (SQL adapter)
+func (s *SQLStateStore) GetState(ctx context.Context, namespace, entityID, key string, valuePtr interface{}) error {
+    var valueType, valueData string
+    
+    query := `
+        SELECT value_type, value_data FROM entity_state
+        WHERE namespace = ? AND entity_id = ? AND key = ?
+    `
+    
+    err := s.db.QueryRowContext(ctx, query, namespace, entityID, key).Scan(&valueType, &valueData)
+    if err != nil {
+        return err
+    }
+    
+    return deserializeValue(valueType, valueData, valuePtr)
+}
+```
+
+### 4. Plugin Usage Example
+
+Plugins can use the state store to persist their state without needing dedicated tables:
+
+```go
+// OAuth2 provider using the state store
+func (p *OAuth2Provider) StoreTokens(ctx context.Context, userID string, tokens *OAuth2Tokens) error {
+    return p.stateStore.StoreState(ctx, "oauth2", userID, "tokens", tokens)
+}
+
+func (p *OAuth2Provider) GetTokens(ctx context.Context, userID string) (*OAuth2Tokens, error) {
+    var tokens OAuth2Tokens
+    err := p.stateStore.GetState(ctx, "oauth2", userID, "tokens", &tokens)
+    if err != nil {
+        return nil, err
+    }
+    return &tokens, nil
+}
+```
+
+### 5. Benefits of Generic State Storage
+
+- **Schema Flexibility**: Plugins can store any structured data without schema changes
+- **No Table Proliferation**: Avoids creating many tables for different plugins
+- **Consistency**: Unified approach to state storage across all plugins
+- **Isolation**: Each plugin's state is namespaced to avoid conflicts
+- **Query Efficiency**: Indexes ensure efficient retrieval by namespace, entity, and key
+- **Migration Simplicity**: Only one table to manage in database migrations
+
+This approach allows all storage adapters to provide plugin state storage capability without requiring plugins to define their own storage schemas, while maintaining type safety and query efficiency.
+
 ## Package Structure
 
 ```

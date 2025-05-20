@@ -3,6 +3,8 @@ package errors
 import (
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 )
 
 // Standard errors in the auth2 package
@@ -248,4 +250,46 @@ func Wrap(err error, message string) error {
 		return nil
 	}
 	return fmt.Errorf("%s: %w", message, err)
+}
+
+// CompareVersions compares two semantic version strings.
+// Returns:
+//   -1 if v1 < v2
+//    0 if v1 == v2
+//   +1 if v1 > v2
+//   Error if versions are not valid semantic versions
+func CompareVersions(v1, v2 string) (int, error) {
+	// Parse version strings
+	v1Parts := strings.Split(strings.Split(v1, "-")[0], ".")
+	v2Parts := strings.Split(strings.Split(v2, "-")[0], ".")
+	
+	// Ensure we have at least 3 parts (major.minor.patch)
+	for len(v1Parts) < 3 {
+		v1Parts = append(v1Parts, "0")
+	}
+	for len(v2Parts) < 3 {
+		v2Parts = append(v2Parts, "0")
+	}
+	
+	// Compare each part
+	for i := 0; i < 3; i++ {
+		v1Num, err := strconv.Atoi(v1Parts[i])
+		if err != nil {
+			return 0, fmt.Errorf("invalid version format in v1: %s", v1)
+		}
+		
+		v2Num, err := strconv.Atoi(v2Parts[i])
+		if err != nil {
+			return 0, fmt.Errorf("invalid version format in v2: %s", v2)
+		}
+		
+		if v1Num < v2Num {
+			return -1, nil
+		} else if v1Num > v2Num {
+			return 1, nil
+		}
+	}
+	
+	// Versions are equal
+	return 0, nil
 }
