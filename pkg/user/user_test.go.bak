@@ -1,0 +1,628 @@
+package user_test
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/Fishwaldo/auth2/pkg/user"
+)
+
+// mockPasswordUtils is a mock implementation of PasswordUtils for testing
+type mockPasswordUtils struct {
+	hashPassword           func(ctx context.Context, password string) (string, error)
+	verifyPassword         func(ctx context.Context, password, hash string) (bool, error)
+	generatePassword       func(ctx context.Context, length int) (string, error)
+	generateResetToken     func(ctx context.Context) (string, error)
+	generateVerificationToken func(ctx context.Context) (string, error)
+}
+
+func (m *mockPasswordUtils) HashPassword(ctx context.Context, password string) (string, error) {
+	if m.hashPassword != nil {
+		return m.hashPassword(ctx, password)
+	}
+	return "hashed:" + password, nil
+}
+
+func (m *mockPasswordUtils) VerifyPassword(ctx context.Context, password, hash string) (bool, error) {
+	if m.verifyPassword != nil {
+		return m.verifyPassword(ctx, password, hash)
+	}
+	return hash == "hashed:"+password, nil
+}
+
+func (m *mockPasswordUtils) GeneratePassword(ctx context.Context, length int) (string, error) {
+	if m.generatePassword != nil {
+		return m.generatePassword(ctx, length)
+	}
+	return "generated", nil
+}
+
+func (m *mockPasswordUtils) GenerateResetToken(ctx context.Context) (string, error) {
+	if m.generateResetToken != nil {
+		return m.generateResetToken(ctx)
+	}
+	return "reset-token", nil
+}
+
+func (m *mockPasswordUtils) GenerateVerificationToken(ctx context.Context) (string, error) {
+	if m.generateVerificationToken != nil {
+		return m.generateVerificationToken(ctx)
+	}
+	return "verification-token", nil
+}
+
+// mockStore is a mock implementation of user.Store for testing
+type mockStore struct {
+	create  func(ctx context.Context, user *user.User) error
+	getByID func(ctx context.Context, id string) (*user.User, error)
+	getByUsername func(ctx context.Context, username string) (*user.User, error)
+	getByEmail func(ctx context.Context, email string) (*user.User, error)
+	update  func(ctx context.Context, user *user.User) error
+	delete  func(ctx context.Context, id string) error
+	list    func(ctx context.Context, filter map[string]interface{}, offset, limit int) ([]*user.User, error)
+	count   func(ctx context.Context, filter map[string]interface{}) (int, error)
+}
+
+func (m *mockStore) Create(ctx context.Context, user *user.User) error {
+	if m.create != nil {
+		return m.create(ctx, user)
+	}
+	return nil
+}
+
+func (m *mockStore) GetByID(ctx context.Context, id string) (*user.User, error) {
+	if m.getByID != nil {
+		return m.getByID(ctx, id)
+	}
+	return &user.User{ID: id}, nil
+}
+
+func (m *mockStore) GetByUsername(ctx context.Context, username string) (*user.User, error) {
+	if m.getByUsername != nil {
+		return m.getByUsername(ctx, username)
+	}
+	return &user.User{Username: username}, nil
+}
+
+func (m *mockStore) GetByEmail(ctx context.Context, email string) (*user.User, error) {
+	if m.getByEmail != nil {
+		return m.getByEmail(ctx, email)
+	}
+	return &user.User{Email: email}, nil
+}
+
+func (m *mockStore) Update(ctx context.Context, user *user.User) error {
+	if m.update != nil {
+		return m.update(ctx, user)
+	}
+	return nil
+}
+
+func (m *mockStore) Delete(ctx context.Context, id string) error {
+	if m.delete != nil {
+		return m.delete(ctx, id)
+	}
+	return nil
+}
+
+func (m *mockStore) List(ctx context.Context, filter map[string]interface{}, offset, limit int) ([]*user.User, error) {
+	if m.list != nil {
+		return m.list(ctx, filter, offset, limit)
+	}
+	return []*user.User{}, nil
+}
+
+func (m *mockStore) Count(ctx context.Context, filter map[string]interface{}) (int, error) {
+	if m.count != nil {
+		return m.count(ctx, filter)
+	}
+	return 0, nil
+}
+
+// mockProfileStore is a mock implementation of user.ProfileStore for testing
+type mockProfileStore struct {
+	getProfile    func(ctx context.Context, userID string) (map[string]interface{}, error)
+	updateProfile func(ctx context.Context, userID string, profile map[string]interface{}) error
+}
+
+func (m *mockProfileStore) GetProfile(ctx context.Context, userID string) (map[string]interface{}, error) {
+	if m.getProfile != nil {
+		return m.getProfile(ctx, userID)
+	}
+	return map[string]interface{}{}, nil
+}
+
+func (m *mockProfileStore) UpdateProfile(ctx context.Context, userID string, profile map[string]interface{}) error {
+	if m.updateProfile != nil {
+		return m.updateProfile(ctx, userID, profile)
+	}
+	return nil
+}
+
+// mockValidator is a mock implementation of user.Validator for testing
+type mockValidator struct {
+	validateNewUser   func(ctx context.Context, user *user.User, password string) error
+	validateUserUpdate func(ctx context.Context, user *user.User) error
+	validatePassword  func(ctx context.Context, user *user.User, password string) error
+}
+
+func (m *mockValidator) ValidateNewUser(ctx context.Context, user *user.User, password string) error {
+	if m.validateNewUser != nil {
+		return m.validateNewUser(ctx, user, password)
+	}
+	return nil
+}
+
+func (m *mockValidator) ValidateUserUpdate(ctx context.Context, user *user.User) error {
+	if m.validateUserUpdate != nil {
+		return m.validateUserUpdate(ctx, user)
+	}
+	return nil
+}
+
+func (m *mockValidator) ValidatePassword(ctx context.Context, user *user.User, password string) error {
+	if m.validatePassword != nil {
+		return m.validatePassword(ctx, user, password)
+	}
+	return nil
+}
+
+// TestUserManagerRegistration tests the user registration functionality
+func TestUserManagerRegistration(t *testing.T) {
+	// Create mock dependencies
+	store := &mockStore{}
+	passwordUtils := &mockPasswordUtils{}
+	profileStore := &mockProfileStore{}
+	
+	// Create user manager
+	manager := user.NewManager(store, passwordUtils, profileStore)
+	
+	// Define test cases
+	testCases := []struct {
+		name      string
+		username  string
+		email     string
+		password  string
+		validator user.Validator
+		storeFn   func(store *mockStore)
+		passwordFn func(pw *mockPasswordUtils)
+		wantErr   bool
+	}{
+		{
+			name:     "Successful registration",
+			username: "testuser",
+			email:    "test@example.com",
+			password: "Password123!",
+			storeFn: func(s *mockStore) {
+				s.create = func(ctx context.Context, user *user.User) error {
+					// Validate the user properties
+					if user.Username != "testuser" {
+						t.Errorf("Expected username %s, got %s", "testuser", user.Username)
+					}
+					if user.Email != "test@example.com" {
+						t.Errorf("Expected email %s, got %s", "test@example.com", user.Email)
+					}
+					if user.PasswordHash != "hashed:Password123!" {
+						t.Errorf("Expected password hash %s, got %s", "hashed:Password123!", user.PasswordHash)
+					}
+					if !user.Enabled {
+						t.Errorf("Expected user to be enabled")
+					}
+					return nil
+				}
+			},
+			wantErr: false,
+		},
+		{
+			name:     "Failed validation",
+			username: "testuser",
+			email:    "test@example.com",
+			password: "Password123!",
+			validator: &mockValidator{
+				validateNewUser: func(ctx context.Context, user *user.User, password string) error {
+					return user.ErrInvalidCredentials
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name:     "Failed store creation",
+			username: "testuser",
+			email:    "test@example.com",
+			password: "Password123!",
+			storeFn: func(s *mockStore) {
+				s.create = func(ctx context.Context, user *user.User) error {
+					return user.ErrUserNotFound
+				}
+			},
+			wantErr: true,
+		},
+	}
+	
+	// Run test cases
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Reset mock functions
+			store.create = nil
+			passwordUtils.hashPassword = nil
+			
+			// Add validator if specified
+			if tc.validator != nil {
+				manager.AddValidator(tc.validator)
+			}
+			
+			// Set up store mock
+			if tc.storeFn != nil {
+				tc.storeFn(store)
+			}
+			
+			// Set up password utils mock
+			if tc.passwordFn != nil {
+				tc.passwordFn(passwordUtils)
+			}
+			
+			// Call Register
+			ctx := context.Background()
+			_, err := manager.Register(ctx, tc.username, tc.email, tc.password)
+			
+			// Check result
+			if (err != nil) != tc.wantErr {
+				t.Errorf("Register() error = %v, wantErr %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+// TestUserManagerAuthentication tests the user authentication functionality
+func TestUserManagerAuthentication(t *testing.T) {
+	// Create mock dependencies
+	store := &mockStore{}
+	passwordUtils := &mockPasswordUtils{}
+	profileStore := &mockProfileStore{}
+	
+	// Create user manager
+	manager := user.NewManager(store, passwordUtils, profileStore)
+	
+	// Define test cases
+	testCases := []struct {
+		name         string
+		username     string
+		password     string
+		getByUsernameFn func(ctx context.Context, username string) (*user.User, error)
+		verifyPasswordFn func(ctx context.Context, password, hash string) (bool, error)
+		trackLoginFn  func(ctx context.Context, user *user.User) error
+		wantErr      bool
+	}{
+		{
+			name:     "Successful authentication",
+			username: "testuser",
+			password: "Password123!",
+			getByUsernameFn: func(ctx context.Context, username string) (*user.User, error) {
+				return &user.User{
+					ID:           "user1",
+					Username:     "testuser",
+					PasswordHash: "hashed:Password123!",
+					Enabled:      true,
+				}, nil
+			},
+			wantErr: false,
+		},
+		{
+			name:     "User not found",
+			username: "unknownuser",
+			password: "Password123!",
+			getByUsernameFn: func(ctx context.Context, username string) (*user.User, error) {
+				return nil, user.ErrUserNotFound
+			},
+			wantErr: true,
+		},
+		{
+			name:     "Invalid password",
+			username: "testuser",
+			password: "WrongPassword",
+			getByUsernameFn: func(ctx context.Context, username string) (*user.User, error) {
+				return &user.User{
+					ID:           "user1",
+					Username:     "testuser",
+					PasswordHash: "hashed:Password123!",
+					Enabled:      true,
+				}, nil
+			},
+			verifyPasswordFn: func(ctx context.Context, password, hash string) (bool, error) {
+				return false, nil
+			},
+			wantErr: true,
+		},
+		{
+			name:     "Account locked",
+			username: "lockeduser",
+			password: "Password123!",
+			getByUsernameFn: func(ctx context.Context, username string) (*user.User, error) {
+				return &user.User{
+					ID:           "user2",
+					Username:     "lockeduser",
+					PasswordHash: "hashed:Password123!",
+					Enabled:      true,
+					Locked:       true,
+				}, nil
+			},
+			wantErr: true,
+		},
+		{
+			name:     "Account disabled",
+			username: "disableduser",
+			password: "Password123!",
+			getByUsernameFn: func(ctx context.Context, username string) (*user.User, error) {
+				return &user.User{
+					ID:           "user3",
+					Username:     "disableduser",
+					PasswordHash: "hashed:Password123!",
+					Enabled:      false,
+				}, nil
+			},
+			wantErr: true,
+		},
+	}
+	
+	// Run test cases
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Set up mocks
+			if tc.getByUsernameFn != nil {
+				store.getByUsername = tc.getByUsernameFn
+			}
+			
+			if tc.verifyPasswordFn != nil {
+				passwordUtils.verifyPassword = tc.verifyPasswordFn
+			}
+			
+			// Override TrackLoginAttempt if needed
+			origTrackLoginFn := manager.TrackLoginAttempt
+			defer func() {
+				// Restore original function
+				manager.TrackLoginAttempt = origTrackLoginFn
+			}()
+			
+			if tc.trackLoginFn != nil {
+				// This is a function, so we create our own mockTrackLoginAttempt
+				manager.TrackLoginAttempt = func(ctx context.Context, userID string, successful bool) error {
+					return nil
+				}
+			}
+			
+			// Call Authenticate
+			ctx := context.Background()
+			_, err := manager.Authenticate(ctx, tc.username, tc.password)
+			
+			// Check result
+			if (err != nil) != tc.wantErr {
+				t.Errorf("Authenticate() error = %v, wantErr %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+// TestUserManagerPasswordManagement tests password management functionality
+func TestUserManagerPasswordManagement(t *testing.T) {
+	// Create mock dependencies
+	store := &mockStore{}
+	passwordUtils := &mockPasswordUtils{}
+	profileStore := &mockProfileStore{}
+	
+	// Create user manager
+	manager := user.NewManager(store, passwordUtils, profileStore)
+	
+	// Test ChangePassword
+	t.Run("ChangePassword", func(t *testing.T) {
+		// Set up mocks
+		user1 := &user.User{
+			ID:           "user1",
+			Username:     "testuser",
+			PasswordHash: "hashed:OldPassword123!",
+		}
+		
+		store.getByID = func(ctx context.Context, id string) (*user.User, error) {
+			if id == "user1" {
+				return user1, nil
+			}
+			return nil, user.ErrUserNotFound
+		}
+		
+		store.update = func(ctx context.Context, u *user.User) error {
+			// Verify the user was updated correctly
+			if u.ID != "user1" {
+				t.Errorf("Expected user ID user1, got %s", u.ID)
+			}
+			if u.PasswordHash != "hashed:NewPassword123!" {
+				t.Errorf("Expected password hash %s, got %s", "hashed:NewPassword123!", u.PasswordHash)
+			}
+			return nil
+		}
+		
+		// Test successful password change
+		err := manager.ChangePassword(context.Background(), "user1", "OldPassword123!", "NewPassword123!")
+		if err != nil {
+			t.Errorf("ChangePassword() error = %v, want nil", err)
+		}
+		
+		// Test with invalid current password
+		passwordUtils.verifyPassword = func(ctx context.Context, password, hash string) (bool, error) {
+			return false, nil
+		}
+		
+		err = manager.ChangePassword(context.Background(), "user1", "WrongPassword", "NewPassword123!")
+		if err == nil {
+			t.Errorf("ChangePassword() error = nil, want error")
+		}
+		
+		// Test with non-existent user
+		err = manager.ChangePassword(context.Background(), "nonexistent", "OldPassword123!", "NewPassword123!")
+		if err == nil {
+			t.Errorf("ChangePassword() error = nil, want error")
+		}
+	})
+	
+	// Test ResetPassword
+	t.Run("ResetPassword", func(t *testing.T) {
+		// Set up mocks
+		resetTime := time.Now().Add(24 * time.Hour).Unix()
+		user1 := &user.User{
+			ID:           "user1",
+			Username:     "testuser",
+			PasswordHash: "hashed:OldPassword123!",
+			Metadata: map[string]interface{}{
+				"password_reset_token":  "valid-token",
+				"password_reset_expiry": resetTime,
+			},
+		}
+		
+		store.getByID = func(ctx context.Context, id string) (*user.User, error) {
+			if id == "user1" {
+				return user1, nil
+			}
+			return nil, user.ErrUserNotFound
+		}
+		
+		store.update = func(ctx context.Context, u *user.User) error {
+			// Verify the user was updated correctly
+			if u.ID != "user1" {
+				t.Errorf("Expected user ID user1, got %s", u.ID)
+			}
+			if u.PasswordHash != "hashed:NewPassword123!" {
+				t.Errorf("Expected password hash %s, got %s", "hashed:NewPassword123!", u.PasswordHash)
+			}
+			
+			// Verify reset token was cleared
+			if _, exists := u.Metadata["password_reset_token"]; exists {
+				t.Errorf("Expected password_reset_token to be cleared")
+			}
+			if _, exists := u.Metadata["password_reset_expiry"]; exists {
+				t.Errorf("Expected password_reset_expiry to be cleared")
+			}
+			
+			return nil
+		}
+		
+		// Test successful password reset
+		err := manager.ResetPassword(context.Background(), "user1", "valid-token", "NewPassword123!")
+		if err != nil {
+			t.Errorf("ResetPassword() error = %v, want nil", err)
+		}
+		
+		// Test with invalid token
+		err = manager.ResetPassword(context.Background(), "user1", "invalid-token", "NewPassword123!")
+		if err == nil {
+			t.Errorf("ResetPassword() error = nil, want error")
+		}
+		
+		// Test with non-existent user
+		err = manager.ResetPassword(context.Background(), "nonexistent", "valid-token", "NewPassword123!")
+		if err == nil {
+			t.Errorf("ResetPassword() error = nil, want error")
+		}
+	})
+}
+
+// TestUserManagerAccountManagement tests account management functionality
+func TestUserManagerAccountManagement(t *testing.T) {
+	// Create mock dependencies
+	store := &mockStore{}
+	passwordUtils := &mockPasswordUtils{}
+	profileStore := &mockProfileStore{}
+	
+	// Create user manager
+	manager := user.NewManager(store, passwordUtils, profileStore)
+	
+	// Test LockUser
+	t.Run("LockUser", func(t *testing.T) {
+		// Set up mocks
+		user1 := &user.User{
+			ID:       "user1",
+			Username: "testuser",
+			Enabled:  true,
+			Locked:   false,
+		}
+		
+		store.getByID = func(ctx context.Context, id string) (*user.User, error) {
+			if id == "user1" {
+				return user1, nil
+			}
+			return nil, user.ErrUserNotFound
+		}
+		
+		store.update = func(ctx context.Context, u *user.User) error {
+			// Verify the user was updated correctly
+			if u.ID != "user1" {
+				t.Errorf("Expected user ID user1, got %s", u.ID)
+			}
+			if !u.Locked {
+				t.Errorf("Expected user to be locked")
+			}
+			if u.LockoutReason != "Test lock reason" {
+				t.Errorf("Expected lockout reason %s, got %s", "Test lock reason", u.LockoutReason)
+			}
+			return nil
+		}
+		
+		// Test successful lock
+		err := manager.LockUser(context.Background(), "user1", "Test lock reason")
+		if err != nil {
+			t.Errorf("LockUser() error = %v, want nil", err)
+		}
+		
+		// Test with non-existent user
+		err = manager.LockUser(context.Background(), "nonexistent", "Test lock reason")
+		if err == nil {
+			t.Errorf("LockUser() error = nil, want error")
+		}
+	})
+	
+	// Test UnlockUser
+	t.Run("UnlockUser", func(t *testing.T) {
+		// Set up mocks
+		user1 := &user.User{
+			ID:            "user1",
+			Username:      "testuser",
+			Enabled:       true,
+			Locked:        true,
+			LockoutReason: "Test lock reason",
+		}
+		
+		store.getByID = func(ctx context.Context, id string) (*user.User, error) {
+			if id == "user1" {
+				return user1, nil
+			}
+			return nil, user.ErrUserNotFound
+		}
+		
+		store.update = func(ctx context.Context, u *user.User) error {
+			// Verify the user was updated correctly
+			if u.ID != "user1" {
+				t.Errorf("Expected user ID user1, got %s", u.ID)
+			}
+			if u.Locked {
+				t.Errorf("Expected user to be unlocked")
+			}
+			if u.LockoutReason != "" {
+				t.Errorf("Expected lockout reason to be empty, got %s", u.LockoutReason)
+			}
+			if u.FailedLoginAttempts != 0 {
+				t.Errorf("Expected failed login attempts to be reset, got %d", u.FailedLoginAttempts)
+			}
+			return nil
+		}
+		
+		// Test successful unlock
+		err := manager.UnlockUser(context.Background(), "user1")
+		if err != nil {
+			t.Errorf("UnlockUser() error = %v, want nil", err)
+		}
+		
+		// Test with non-existent user
+		err = manager.UnlockUser(context.Background(), "nonexistent")
+		if err == nil {
+			t.Errorf("UnlockUser() error = nil, want error")
+		}
+	})
+}
