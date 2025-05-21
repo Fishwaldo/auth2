@@ -1,0 +1,57 @@
+name: Go Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: ['1.22', '1.23', '1.24']
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Go ${{ matrix.go-version }}
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ matrix.go-version }}
+        cache: true
+
+    - name: Get dependencies
+      run: go mod download
+
+    - name: Verify dependencies
+      run: go mod verify
+
+    - name: Run vet
+      run: go vet ./...
+
+    - name: Run tests with coverage
+      run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
+
+    - name: Upload coverage report
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.out
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Run Gosec Security Scanner
+      uses: securego/gosec@master
+      with:
+        args: ./...
