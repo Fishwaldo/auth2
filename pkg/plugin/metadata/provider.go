@@ -24,6 +24,8 @@ const (
 	ProviderTypeRateLimit ProviderType = "ratelimit"
 	// ProviderTypeCSRF represents a CSRF protector
 	ProviderTypeCSRF ProviderType = "csrf"
+	// ProviderTypeSecurity represents a security service provider
+	ProviderTypeSecurity ProviderType = "security"
 )
 
 // VersionConstraint defines the version compatibility for a provider

@@ -47,6 +47,7 @@ var (
 	// Plugin errors
 	ErrPluginNotFound   = errors.New("plugin not found")
 	ErrIncompatiblePlugin = errors.New("incompatible plugin")
+	ErrProviderExists   = errors.New("provider already exists")
 )
 
 // AuthError represents an authentication-related error
@@ -242,6 +243,11 @@ func As(err error, target interface{}) bool {
 // New creates a new error with the given message
 func New(text string) error {
 	return errors.New(text)
+}
+
+// NewInternalError creates a new internal error with the given message
+func NewInternalError(message string) error {
+	return Wrap(ErrInternal, message)
 }
 
 // Wrap wraps an error with additional context

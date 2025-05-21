@@ -652,18 +652,12 @@ type Validator interface {
 	ValidatePassword(ctx context.Context, user *User, password string) error
 }
 
-// Common errors
+// Additional errors not already defined in errors.go
 var (
-	ErrUserNotFound        = &UserError{Code: "user_not_found", Message: "User not found"}
-	ErrInvalidCredentials  = &UserError{Code: "invalid_credentials", Message: "Invalid credentials"}
 	ErrInvalidToken        = &UserError{Code: "invalid_token", Message: "Invalid token"}
 	ErrMFARequired         = &UserError{Code: "mfa_required", Message: "Multi-factor authentication required"}
 	ErrMFAAlreadyEnabled   = &UserError{Code: "mfa_already_enabled", Message: "Multi-factor authentication already enabled"}
 	ErrMFANotEnabled       = &UserError{Code: "mfa_not_enabled", Message: "Multi-factor authentication not enabled"}
-	ErrAccountLocked       = &UserError{Code: "account_locked", Message: "Account is locked"}
-	ErrAccountDisabled     = &UserError{Code: "account_disabled", Message: "Account is disabled"}
-	ErrEmailNotVerified    = &UserError{Code: "email_not_verified", Message: "Email not verified"}
-	ErrPasswordChangeRequired = &UserError{Code: "password_change_required", Message: "Password change required"}
 	ErrUsernameExists      = &UserError{Code: "username_exists", Message: "Username already exists"}
 	ErrEmailExists         = &UserError{Code: "email_exists", Message: "Email already exists"}
 )

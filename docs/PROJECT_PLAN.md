@@ -32,10 +32,10 @@ This document outlines the step-by-step implementation plan for the Auth2 librar
 - [x] Build chain-of-responsibility pattern for auth attempts
 
 ### 2.2 Basic Authentication
-- [ ] Implement username/password provider
-- [ ] Create password hashing utilities (bcrypt, argon2id)
-- [ ] Build password policy enforcement
-- [ ] Implement account locking mechanism
+- [x] Implement username/password provider
+- [x] Create password hashing utilities (bcrypt, argon2id)
+- [x] Build password policy enforcement
+- [x] Implement account locking mechanism
 
 ### 2.3 WebAuthn/FIDO2 as Primary Authentication
 - [ ] Implement WebAuthn passwordless registration
@@ -286,7 +286,7 @@ This document outlines the step-by-step implementation plan for the Auth2 librar
 - [x] Project setup complete
 - [x] Plugin system architecture implemented
 - [x] Core domain models defined
-- [ ] Basic authentication working
+- [x] Basic authentication working
 
 ### Milestone 2: Authentication Providers (Weeks 3-4)
 - [ ] OAuth2 framework implemented

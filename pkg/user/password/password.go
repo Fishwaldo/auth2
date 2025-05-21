@@ -9,6 +9,7 @@ import (
 	"strings"
 	
 	"golang.org/x/crypto/argon2"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // HashingAlgorithm defines the supported password hashing algorithms
@@ -17,6 +18,8 @@ type HashingAlgorithm string
 const (
 	// Argon2id is the recommended algorithm for password hashing
 	Argon2id HashingAlgorithm = "argon2id"
+	// Bcrypt is an alternative algorithm for password hashing
+	Bcrypt HashingAlgorithm = "bcrypt"
 )
 
 // Policy defines a password policy
@@ -47,6 +50,9 @@ type Policy struct {
 	
 	// RequiredPasswordHistory is the number of previous passwords that cannot be reused
 	RequiredPasswordHistory int
+	
+	// PasswordExpiry is the number of days before a password expires (0 = never expire)
+	PasswordExpiry int
 }
 
 // DefaultPolicy returns a default password policy
@@ -93,22 +99,41 @@ func DefaultArgon2Params() *Argon2Params {
 	}
 }
 
+// BcryptParams defines parameters for Bcrypt password hashing
+type BcryptParams struct {
+	// Cost is the cost parameter for bcrypt hashing (4-31)
+	Cost int
+}
+
+// DefaultBcryptParams returns recommended Bcrypt parameters
+func DefaultBcryptParams() *BcryptParams {
+	return &BcryptParams{
+		Cost: 12, // Recommended cost as of 2023
+	}
+}
+
 // Utils implements password utilities
 type Utils struct {
 	policy         *Policy
 	argon2Params   *Argon2Params
+	bcryptParams   *BcryptParams
 	hashingAlgo    HashingAlgorithm
 	tokenGenerator *TokenGenerator
+	tokenStore     TokenStore
 }
 
 // NewUtils creates a new password utilities instance
-func NewUtils(policy *Policy, argon2Params *Argon2Params, hashingAlgo HashingAlgorithm) *Utils {
+func NewUtils(policy *Policy, argon2Params *Argon2Params, bcryptParams *BcryptParams, hashingAlgo HashingAlgorithm) *Utils {
 	if policy == nil {
 		policy = DefaultPolicy()
 	}
 	
 	if argon2Params == nil {
 		argon2Params = DefaultArgon2Params()
+	}
+	
+	if bcryptParams == nil {
+		bcryptParams = DefaultBcryptParams()
 	}
 	
 	if hashingAlgo == "" {
@@ -118,6 +143,7 @@ func NewUtils(policy *Policy, argon2Params *Argon2Params, hashingAlgo HashingAlg
 	return &Utils{
 		policy:         policy,
 		argon2Params:   argon2Params,
+		bcryptParams:   bcryptParams,
 		hashingAlgo:    hashingAlgo,
 		tokenGenerator: NewTokenGenerator(),
 	}
@@ -128,6 +154,8 @@ func (u *Utils) HashPassword(ctx context.Context, password string) (string, erro
 	switch u.hashingAlgo {
 	case Argon2id:
 		return u.hashArgon2id(password)
+	case Bcrypt:
+		return u.hashBcrypt(password)
 	default:
 		return "", fmt.Errorf("unsupported hashing algorithm: %s", u.hashingAlgo)
 	}
@@ -145,6 +173,8 @@ func (u *Utils) VerifyPassword(ctx context.Context, password, hash string) (bool
 	switch parts[1] {
 	case "argon2id":
 		return u.verifyArgon2id(password, hash)
+	case "2a", "2b", "2y": // bcrypt algorithm identifiers
+		return u.verifyBcrypt(password, hash)
 	default:
 		return false, fmt.Errorf("unsupported hashing algorithm: %s", parts[1])
 	}
@@ -379,4 +409,24 @@ func (g *TokenGenerator) GenerateToken(length int) (string, error) {
 		return "", err
 	}
 	return base64.URLEncoding.EncodeToString(bytes), nil
+}
+
+// hashBcrypt hashes a password using bcrypt
+func (u *Utils) hashBcrypt(password string) (string, error) {
+	// Generate bcrypt hash
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), u.bcryptParams.Cost)
+	if err != nil {
+		return "", err
+	}
+	
+	// Bcrypt already includes the algorithm identifier and parameters
+	// Just return the hash as-is
+	return string(hash), nil
+}
+
+// verifyBcrypt verifies a password against a bcrypt hash
+func (u *Utils) verifyBcrypt(password, encodedHash string) (bool, error) {
+	// CompareHashAndPassword returns nil on success, or an error on failure
+	err := bcrypt.CompareHashAndPassword([]byte(encodedHash), []byte(password))
+	return err == nil, nil
 }
