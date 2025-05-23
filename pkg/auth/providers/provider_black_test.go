@@ -76,6 +76,7 @@ func TestAuthErrorHelpers(t *testing.T) {
 	})
 	
 	t.Run("NewAuthFailedError", func(t *testing.T) {
+		// Test with provided details
 		err := providers.NewAuthFailedError("test reason", map[string]interface{}{
 			"test_key": "test_value",
 		})
@@ -89,6 +90,18 @@ func TestAuthErrorHelpers(t *testing.T) {
 		assert.Equal(t, "test reason", stdErr.Message)
 		assert.Equal(t, "test_value", stdErr.Details["test_key"])
 		assert.Equal(t, "test reason", stdErr.Details["reason"])
+		
+		// Test with nil details
+		err2 := providers.NewAuthFailedError("another reason", nil)
+		
+		assert.Error(t, err2)
+		assert.True(t, errors.Is(err2, errors.ErrAuthFailed))
+		
+		var stdErr2 *errors.Error
+		assert.True(t, errors.As(err2, &stdErr2))
+		assert.Equal(t, errors.CodeAuthFailed, stdErr2.ErrorCode)
+		assert.Equal(t, "another reason", stdErr2.Message)
+		assert.Equal(t, "another reason", stdErr2.Details["reason"])
 	})
 	
 	t.Run("NewInvalidCredentialsError", func(t *testing.T) {

@@ -3,7 +3,7 @@ package errors
 import (
 	"encoding/json"
 	"net/http"
-	"errors"
+	stderrors "errors"
 )
 
 // HTTPError represents an error returned via HTTP
@@ -90,15 +90,19 @@ func ErrorToHTTP(err error) *HTTPError {
 		Code:    "internal",
 		Message: err.Error(),
 		Details: make(map[string]interface{}),
-		Status:  http.StatusInternalServerError,
+		Status:  status, // Use the status from errorToHTTPStatus
 	}
 	
 	// Check if the error is an Error
 	var e *Error
-	if errors.As(err, &e) {
+	if stderrors.As(err, &e) {
+		message := e.Message
+		if message == "" {
+			message = e.Error()
+		}
 		httpErr = &HTTPError{
 			Code:    string(e.ErrorCode),
-			Message: e.Message,
+			Message: message,
 			Details: e.Details,
 			Status:  status,
 		}
@@ -123,27 +127,27 @@ var (
 // errorToHTTPStatus maps errors to HTTP status codes
 func errorToHTTPStatus(err error) int {
 	switch {
-	case errors.Is(err, ErrNotFound):
+	case Is(err, ErrNotFound):
 		return http.StatusNotFound
-	case errors.Is(err, ErrAlreadyExists):
+	case Is(err, ErrAlreadyExists):
 		return http.StatusConflict
-	case errors.Is(err, ErrInvalidArgument):
+	case Is(err, ErrInvalidArgument):
 		return http.StatusBadRequest
-	case errors.Is(err, ErrInvalidOperation):
+	case Is(err, ErrInvalidOperation):
 		return http.StatusBadRequest
-	case errors.Is(err, ErrUnauthenticated):
+	case Is(err, ErrUnauthenticated):
 		return http.StatusUnauthorized
-	case errors.Is(err, ErrUnauthorized):
+	case Is(err, ErrUnauthorized):
 		return http.StatusForbidden
-	case errors.Is(err, ErrForbidden):
+	case Is(err, ErrForbidden):
 		return http.StatusForbidden
-	case errors.Is(err, ErrRateLimited):
+	case Is(err, ErrRateLimited):
 		return http.StatusTooManyRequests
-	case errors.Is(err, ErrTimeout):
+	case Is(err, ErrTimeout):
 		return http.StatusGatewayTimeout
-	case errors.Is(err, ErrCanceled):
+	case Is(err, ErrCanceled):
 		return http.StatusRequestTimeout
-	case errors.Is(err, ErrServiceUnavailable):
+	case Is(err, ErrServiceUnavailable):
 		return http.StatusServiceUnavailable
 	default:
 		// Check if the error has a specific code

@@ -395,6 +395,7 @@ func (c *Config) ConfigureLogging() *log.Logger {
 		Format:      c.Logging.Format,
 		AddSource:   c.Logging.AddSource,
 		ContextKeys: c.Logging.Fields,
+		Writer:      os.Stderr, // Default to stderr
 	}
 
 	logger := log.New(logConfig)
