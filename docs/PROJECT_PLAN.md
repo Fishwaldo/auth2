@@ -38,11 +38,11 @@ This document outlines the step-by-step implementation plan for the Auth2 librar
 - [x] Implement account locking mechanism
 
 ### 2.3 WebAuthn/FIDO2 as Primary Authentication
-- [ ] Implement WebAuthn passwordless registration
-- [ ] Create WebAuthn passwordless authentication
-- [ ] Build attestation verification
-- [ ] Implement credential storage and management
-- [ ] Create dual-mode provider interface for both primary and MFA use
+- [x] Implement WebAuthn passwordless registration
+- [x] Create WebAuthn passwordless authentication
+- [x] Build attestation verification
+- [x] Implement credential storage and management
+- [x] Create dual-mode provider interface for both primary and MFA use
 
 ### 2.4 OAuth2 Framework
 - [ ] Design generic OAuth2 provider
@@ -77,9 +77,9 @@ This document outlines the step-by-step implementation plan for the Auth2 librar
 - [ ] Implement validation with drift windows
 
 ### 3.3 WebAuthn/FIDO2 as MFA
-- [ ] Implement WebAuthn MFA registration
-- [ ] Create WebAuthn MFA verification
-- [ ] Build integration with primary authentication methods
+- [x] Implement WebAuthn MFA registration
+- [x] Create WebAuthn MFA verification
+- [x] Build integration with primary authentication methods
 - [ ] Implement fallback mechanisms
 
 ### 3.4 Email OTP
