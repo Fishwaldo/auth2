@@ -175,6 +175,8 @@ func errorToHTTPStatus(err error) int {
 			return http.StatusRequestTimeout
 		case CodeUnavailable:
 			return http.StatusServiceUnavailable
+		case CodeValidation:
+			return http.StatusBadRequest
 		default:
 			return http.StatusInternalServerError
 		}
